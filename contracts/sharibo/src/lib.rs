@@ -255,6 +255,10 @@ const PUBLIC_INPUT_COUNT: u32 = 4;
 /// `apply_fee` and `create_circle` share this single source of truth.
 const MAX_FEE_BASIS_POINTS: u32 = 10_000;
 
+/// Maximum circle size = 2^4 = 16, matching `circuits/config.json` levels.
+/// Pinned by the `max_circle_size_matches_circuit_levels` test in `test.rs`.
+const MAX_CIRCLE_SIZE: u32 = 16;
+
 const LEDGER_THRESHOLD: u32 = 100;
 
 /// TTL (in ledgers) that persistent and instance entries are extended to on
@@ -1195,7 +1199,7 @@ fn pot_target(env: &Env, circle: &Circle) -> i128 {
 ///
 /// `(fee, net)` where `fee + net == amount`.
 fn apply_fee(env: &Env, fee_bps: u32, amount: i128) -> (i128, i128) {
-    if fee_bps > MAX_FEE_BASIS_POINTS {
+    if fee_bps > MAX_FEE_BASIS_POINTS || amount < 0 {
         panic_with_error!(env, Error::InvalidFeeParams);
     }
     // Split to avoid overflow: amount = q * 10_000 + r, so
