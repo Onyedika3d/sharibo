@@ -23,6 +23,7 @@ import {
   PATIENT_RETRY_POLICY,
   type Identity,
   makeCircleId,
+  makeExternalNullifier,
   ContractError,
   CircleNotFoundError,
   RoundNotFundedError,
@@ -255,7 +256,7 @@ function CopyDebugBundleButton({
   timings,
   recentEvents,
 }: {
-  circleId: bigint | null;
+  circleId: CircleId | null;
   round: number;
   currentStep: string | null;
   lastError: string | null;
@@ -658,7 +659,7 @@ export default function App() {
   const [cancelled, setCancelled] = useState(false);
   const [claimantIndex, setClaimantIndex] = useState(0);
   const [proof, setProof] = useState<ContractProof | null>(null);
-  const [nullifierHash, setNullifierHash] = useState<bigint | null>(null);
+  const [nullifierHash, setNullifierHash] = useState<NullifierHash | null>(null);
   const [claimResult, setClaimResult] = useState<ClaimResult | null>(null);
   const [isProving, setIsProving] = useState(false);
   const [provingElapsedMs, setProvingElapsedMs] = useState<number | null>(null);
@@ -826,12 +827,12 @@ export default function App() {
       try {
         dispatch({ type: "setBusy", busy: "Checking member eligibility…" });
         const client = await import("@sharibo/client");
-        const { computeExternalNullifier, computeNullifierHash, connect, hasClaimed } = client;
+        const { computeExternalNullifier, computeNullifierHash, connect, hasClaimed, makeNullifierHash } = client;
         const external = await computeExternalNullifier(circleId, BigInt(round));
         const adminClient = await connect(NETWORK, await toShariboSigner(admin));
         const results = await Promise.all(
           members.map(async (m) => {
-            const nullifier = computeNullifierHash(m.identity.identityNullifier, external);
+            const nullifier = makeNullifierHash(computeNullifierHash(m.identity.identityNullifier, external));
             return await hasClaimed(adminClient, circleId, nullifier);
           }),
         );
@@ -1312,10 +1313,10 @@ export default function App() {
         const memberClient = await connect({ ...NETWORK, onEvent }, m.keypair);
         await fund(memberClient, { circleId, from: m.keypair.publicKey() });
       }
-      const freshExternalNullifier = await computeExternalNullifier(
+      const freshExternalNullifier = makeExternalNullifier(await computeExternalNullifier(
         circleId,
         BigInt(round),
-      );
+      ));
 
       setBusy(t("busy.replaying"));
       await claim(

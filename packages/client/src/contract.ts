@@ -8,10 +8,7 @@ import { decodeContractError } from "./decodeError.js";
 import { withRetry, DEFAULT_RETRY_POLICY, type RetryPolicy } from "./retry.js";
 import { validateContractProof, validateContractVerificationKey, assertInField } from "./validate.js";
 import { SdkEventEmitter, type OnEventFn } from "./events.js";
-
-// Public signal order and claim argument order are specified in
-// docs/wire-format.md §1 — that document is the single source of truth.
-
+import { type CircleId, type NullifierHash, type ExternalNullifier, makeCircleId } from "./brand.js";
 /**
  * Configuration required to connect to the Sharibo contract.
  *
@@ -336,10 +333,10 @@ export interface FeeEstimate {
 export async function estimateClaimFee(
   client: ShariboClient,
   args: {
-    circleId: bigint;
+    circleId: CircleId;
     recipient: string;
-    nullifierHash: bigint;
-    externalNullifier: bigint;
+    nullifierHash: NullifierHash;
+    externalNullifier: ExternalNullifier;
     proof: ContractProof;
   },
   retryPolicy: RetryPolicy = DEFAULT_RETRY_POLICY,
@@ -382,7 +379,7 @@ export async function estimateClaimFee(
 async function simulateSignAndSend<T>(
   build: () => Promise<ContractTx>,
   retryPolicy: RetryPolicy = DEFAULT_RETRY_POLICY,
-): Promise<TxResult<bigint>> {
+): Promise<TxResult<CircleId>> {
   if (args.size === 0 || args.contribution <= 0n || args.vk.ic.length !== 4) {
     throw new InvalidInputError(
       "InvalidCircleParams: size must be > 0, contribution must be > 0, and vk.ic must have length 4",
@@ -588,7 +585,7 @@ export interface CircleStatus {
  */
 export async function getCircleStatus(
   client: ShariboClient,
-  circleId: bigint,
+  circleId: CircleId,
   retryPolicy: RetryPolicy = DEFAULT_RETRY_POLICY,
 ): Promise<CircleStatus> {
   const [circle, contributors] = await Promise.all([
@@ -694,8 +691,8 @@ export async function getContributors(
  */
 export async function hasClaimed(
   client: ShariboClient,
-  circleId: bigint,
-  nullifierHash: bigint,
+  circleId: CircleId,
+  nullifierHash: NullifierHash,
   retryPolicy: RetryPolicy = DEFAULT_RETRY_POLICY,
 ): Promise<boolean> {
   // `has_claimed` is a pure read — don't submit or force a transaction.
@@ -721,7 +718,7 @@ export async function hasClaimed(
  */
 export async function cancelCircle(
   client: ShariboClient,
-  args: { circleId: bigint },
+  args: { circleId: CircleId },
   retryPolicy: RetryPolicy = DEFAULT_RETRY_POLICY,
 ): Promise<TxResult<void>> {
   try {

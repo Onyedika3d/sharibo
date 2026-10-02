@@ -129,7 +129,7 @@ export function useCircleFlow() {
   const [cancelled, setCancelled] = useState(false);
   const [claimantIndex, setClaimantIndex] = useState(0);
   const [proof, setProof] = useState<ContractProof | null>(null);
-  const [nullifierHash, setNullifierHash] = useState<bigint | null>(null);
+  const [nullifierHash, setNullifierHash] = useState<NullifierHash | null>(null);
   const [claimResult, setClaimResult] = useState<ClaimResult | null>(null);
   const [isProving, setIsProving] = useState(false);
   const [provingElapsedMs, setProvingElapsedMs] = useState<number | null>(null);

@@ -24,6 +24,7 @@ import {
 } from "./contract.js";
 import { Keypair } from "@stellar/stellar-sdk";
 import { DEFAULT_RETRY_POLICY, type RetryPolicy } from "./retry.js";
+import type { CircleId, NullifierHash, ExternalNullifier } from "./brand.js";
 
 export interface ShariboSDKOptions {
   /**
@@ -47,15 +48,15 @@ export interface CreateCircleArgs {
 }
 
 export interface FundArgs {
-  circleId: bigint;
+  circleId: CircleId;
   from: string;
 }
 
 export interface ClaimArgs {
-  circleId: bigint;
+  circleId: CircleId;
   recipient: string;
-  nullifierHash: bigint;
-  externalNullifier: bigint;
+  nullifierHash: NullifierHash;
+  externalNullifier: ExternalNullifier;
   proof: ContractProof;
 }
 

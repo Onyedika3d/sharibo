@@ -4,7 +4,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as url from "node:url";
 import { xdr, scValToNative } from "@stellar/stellar-sdk";
-import { fund, populateTxResult } from "./contract.js";
+import { fund, hasClaimed } from "./contract.js";
 import { DEFAULT_RETRY_POLICY } from "./retry.js";
 import type { ContractVerificationKey } from "./prove.js";
 
@@ -136,7 +136,7 @@ test("transient simulate-phase failure recovers", async () => {
 
   const policy = { ...DEFAULT_RETRY_POLICY, sleep: async () => {} };
 
-  const result = await fund(mockClient, { circleId: 0n, from: "G..." }, policy);
+  const result = await fund(mockClient, { circleId: makeCircleId(0n), from: "G..." }, policy);
   assert.strictEqual(simulateCalls, 3);
   assert.strictEqual(signAndSendCalls, 1);
   assert.strictEqual(result.hash, "0xabc");
@@ -161,7 +161,7 @@ test("post-submit failure surfaces immediately without a second submission", asy
 
   await assert.rejects(
     async () =>
-      await fund(mockClient, { circleId: 0n, from: "G..." }, {
+      await fund(mockClient, { circleId: makeCircleId(0n), from: "G..." }, {
         ...DEFAULT_RETRY_POLICY,
         sleep: async () => {},
       }),
