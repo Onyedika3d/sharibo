@@ -1,12 +1,12 @@
 #![cfg(test)]
 
 use super::*;
-use soroban_sdk::testutils::Events as _;
-use soroban_sdk::Symbol;
 use ark_bls12_381::{Fq, Fq2, Fr as ArkFr};
 use ark_ff::{BigInteger, PrimeField};
 use ark_serialize::CanonicalSerialize;
 use core::str::FromStr;
+use soroban_sdk::testutils::Events as _;
+use soroban_sdk::Symbol;
 use soroban_sdk::{
     crypto::bls12_381::{G1_SERIALIZED_SIZE, G2_SERIALIZED_SIZE},
     symbol_short,
@@ -303,7 +303,10 @@ fn round_reuse_proof_round1(env: &Env) -> Proof {
 // identity as real_nullifier_hash() — deliberately a different value
 // because externalNullifier changed, even though identityNullifier didn't.
 fn round_reuse_nullifier_hash_round1(env: &Env) -> Fr {
-    fr_from_dec_str(env, "49427450209661096950044132594013152139023072336714402456973658706693457893626")
+    fr_from_dec_str(
+        env,
+        "49427450209661096950044132594013152139023072336714402456973658706693457893626",
+    )
 }
 
 fn create_token(env: &Env, admin: &Address) -> Address {
@@ -456,6 +459,7 @@ impl TestCircleBuilder {
 // shared [`TestCircleBuilder`].
 
 mod admin;
+mod auth;
 mod bench;
 mod cancel;
 mod claim;
@@ -467,6 +471,251 @@ mod goldens;
 mod happy_path;
 mod invariants;
 mod recipient;
+mod reentrancy;
 mod ttl;
 mod views;
 
+// ---- Back-compat shims for remote-main tests (issue #565, meta/vk views) ----
+//
+// Remote main (172 commits ahead) added top-level tests using the old
+// `setup()` helper. The modular refactor replaced it with `TestCircleBuilder`;
+// these shims let the ported tests run verbatim while new code uses the builder.
+fn setup(size: u32, contribution: i128) -> TestCircle {
+    let env = Env::default();
+    env.mock_all_auths();
+    TestCircle::new(size, contribution).build(&env)
+}
+
+fn setup_with_fee(size: u32, contribution: i128, fee_bps: u32) -> (TestCircle, Address) {
+    let env = Env::default();
+    env.mock_all_auths();
+    let builder = TestCircle::new(size, contribution).with_fee(fee_bps);
+    let fee_recipient = Address::generate(&env);
+    let s = builder
+        .with_fee_recipient(fee_recipient.clone())
+        .build(&env);
+    (s, fee_recipient)
+}
+
+// ---- Ported from remote main: round_deadline vs LEDGER_EXTEND_TO (#565) ----
+
+#[test]
+fn create_circle_rejects_deadline_at_or_above_ledger_extend_to() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(Contract, ());
+    let client = ContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    let token = create_token(&env, &Address::generate(&env));
+    let vk = real_verification_key(&env);
+    let root = real_root(&env);
+
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        client.create_circle(
+            &admin,
+            &token,
+            &root,
+            &100i128,
+            &5u32,
+            &LEDGER_EXTEND_TO,
+            &vk,
+            &0u32,
+            &Address::generate(&env),
+        );
+    }));
+    assert!(
+        result.is_err(),
+        "deadline == LEDGER_EXTEND_TO must be rejected"
+    );
+}
+
+#[test]
+fn create_circle_accepts_deadline_just_below_ledger_extend_to() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(Contract, ());
+    let client = ContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    let token = create_token(&env, &Address::generate(&env));
+    let vk = real_verification_key(&env);
+    let root = real_root(&env);
+    let deadline = LEDGER_EXTEND_TO - 1;
+
+    let circle_id = client.create_circle(
+        &admin,
+        &token,
+        &root,
+        &100i128,
+        &5u32,
+        &deadline,
+        &vk,
+        &0u32,
+        &Address::generate(&env),
+    );
+    let circle = client.get_circle(&circle_id);
+    assert_eq!(circle.round_deadline_ledgers, deadline);
+}
+
+// ---- Ported from remote main: get_circle_meta / get_vk views ----
+
+#[test]
+fn get_circle_meta_returns_mutable_fields() {
+    let s = setup(5, 100);
+    let client = ContractClient::new(&s.env, &s.client_id);
+
+    let meta = client.get_circle_meta(&s.circle_id);
+    assert_eq!(meta.schema_version, 2);
+    assert_eq!(meta.admin, s.admin);
+    assert_eq!(meta.token, s.token);
+    assert_eq!(meta.contribution, s.contribution);
+    assert_eq!(meta.size, s.size);
+    assert_eq!(meta.round, 0);
+    assert_eq!(meta.pot, 0i128);
+    assert!(!meta.cancelled);
+    assert_eq!(meta.fee_bps, 0u32);
+
+    client.fund(&s.circle_id, &s.members[0]);
+    let meta_after = client.get_circle_meta(&s.circle_id);
+    assert_eq!(meta_after.pot, s.contribution);
+    assert_eq!(meta_after.round, 0);
+}
+
+#[test]
+fn get_circle_meta_has_no_group_elements() {
+    let s = setup(5, 100);
+    let client = ContractClient::new(&s.env, &s.client_id);
+
+    let circle = client.get_circle(&s.circle_id);
+    let meta = client.get_circle_meta(&s.circle_id);
+
+    let circle_xdr = circle.clone().to_xdr(&s.env);
+    let meta_xdr = meta.to_xdr(&s.env);
+
+    assert!(
+        meta_xdr.len() < circle_xdr.len() / 2,
+        "CircleMeta XDR ({}) should be far smaller than Circle XDR ({})",
+        meta_xdr.len(),
+        circle_xdr.len(),
+    );
+
+    for point in [
+        circle.vk.alpha.to_xdr(&s.env),
+        circle.vk.beta.to_xdr(&s.env),
+        circle.vk.gamma.to_xdr(&s.env),
+        circle.vk.delta.to_xdr(&s.env),
+    ] {
+        let needle: StdVec<u8> = point.iter().collect();
+        let haystack: StdVec<u8> = meta_xdr.iter().collect();
+        assert!(
+            !haystack
+                .windows(needle.len())
+                .any(|w| w == needle.as_slice()),
+            "CircleMeta XDR contains a VK group element",
+        );
+    }
+    for ic_point in circle.vk.ic.iter() {
+        let needle: StdVec<u8> = ic_point.to_xdr(&s.env).iter().collect();
+        let haystack: StdVec<u8> = meta_xdr.iter().collect();
+        assert!(
+            !haystack
+                .windows(needle.len())
+                .any(|w| w == needle.as_slice()),
+            "CircleMeta XDR contains a VK ic point",
+        );
+    }
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #1)")]
+fn get_circle_meta_unknown_reverts() {
+    let s = setup(5, 100);
+    let client = ContractClient::new(&s.env, &s.client_id);
+    client.get_circle_meta(&999u64);
+}
+
+#[test]
+fn get_vk_returns_committed_verification_key() {
+    let s = setup(5, 100);
+    let client = ContractClient::new(&s.env, &s.client_id);
+
+    let circle = client.get_circle(&s.circle_id);
+    let vk = client.get_vk(&s.circle_id);
+
+    assert_eq!(
+        vk.alpha.to_xdr(&s.env),
+        circle.vk.alpha.to_xdr(&s.env),
+        "alpha"
+    );
+    assert_eq!(
+        vk.beta.to_xdr(&s.env),
+        circle.vk.beta.to_xdr(&s.env),
+        "beta"
+    );
+    assert_eq!(
+        vk.gamma.to_xdr(&s.env),
+        circle.vk.gamma.to_xdr(&s.env),
+        "gamma"
+    );
+    assert_eq!(
+        vk.delta.to_xdr(&s.env),
+        circle.vk.delta.to_xdr(&s.env),
+        "delta"
+    );
+    assert_eq!(vk.ic.len(), circle.vk.ic.len(), "ic length");
+    for (got, want) in vk.ic.iter().zip(circle.vk.ic.iter()) {
+        assert_eq!(got.to_xdr(&s.env), want.to_xdr(&s.env), "ic point");
+    }
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #1)")]
+fn get_vk_unknown_reverts() {
+    let s = setup(5, 100);
+    let client = ContractClient::new(&s.env, &s.client_id);
+    client.get_vk(&999u64);
+}
+
+#[test]
+fn test_nullifier_set_is_bounded_by_cycle() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(Contract, ());
+    let client = ContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+    let token = create_token(&env, &token_admin);
+    let root = real_root(&env);
+    let vk = real_verification_key(&env);
+
+    let size = 5u32;
+    client.create_circle(
+        &admin, &token, &root, &100i128, &size, &0u32, &vk, &0u32, &admin,
+    );
+
+    for i in 0..20 {
+        env.as_contract(&contract_id, || {
+            let key = DataKey::Circle(0);
+            let mut circle: Circle = env.storage().persistent().get(&key).unwrap();
+
+            circle.pot = 0;
+            circle.round += 1;
+            circle.contributors = Vec::new(&env);
+            circle.round_started_ledger = env.ledger().sequence();
+
+            let dummy_nullifier = Fr::from_u256(soroban_sdk::U256::from_u32(&env, i));
+            circle.nullifiers.push_back(dummy_nullifier);
+            if circle.round % circle.size == 0 {
+                circle.nullifiers = Vec::new(&env);
+            }
+
+            env.storage().persistent().set(&key, &circle);
+        });
+
+        let circle = client.get_circle(&0u64);
+        assert!(
+            circle.nullifiers.len() <= size,
+            "Nullifiers exceeded size bound!"
+        );
+    }
+}

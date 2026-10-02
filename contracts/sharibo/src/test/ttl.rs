@@ -28,7 +28,17 @@ fn instance_ttl_extended_after_create_fund_claim() {
     let vk = real_verification_key(&env);
 
     // create_circle must extend instance TTL.
-    client.create_circle(&admin, &token, &root, &100i128, &5u32, &0u32, &vk, &0u32, &Address::generate(&env));
+    client.create_circle(
+        &admin,
+        &token,
+        &root,
+        &100i128,
+        &5u32,
+        &0u32,
+        &vk,
+        &0u32,
+        &Address::generate(&env),
+    );
 
     // Advance the ledger by LEDGER_THRESHOLD so the instance entry would
     // expire without the extension; the TTL should now be refreshed.

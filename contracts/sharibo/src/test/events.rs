@@ -1,12 +1,12 @@
 #![cfg(test)]
 
 use super::*;
-
-// ---- Contract event tests ----
-//
-// Each state-changing entrypoint emits a contract event so off-chain
-// observers can react without polling. These tests pin the topic tuple and
-// the data payload of each event.
+use crate::events::{
+    AdminAccepted, AdminProposed, CircleCancelled, CircleClaimed, CircleCreated, CircleFunded,
+    RoundExpired,
+};
+use soroban_sdk::testutils::Events as _;
+use soroban_sdk::Event as _;
 
 #[test]
 fn create_circle_emits_created_event() {
@@ -23,31 +23,31 @@ fn create_circle_emits_created_event() {
     let vk = real_verification_key(&env);
     let contribution: i128 = 100;
     let size: u32 = 5;
-    let circle_id = client.create_circle(&admin, &token, &root, &contribution, &size, &0u32, &vk, &0u32, &Address::generate(&env));
+    let circle_id = client.create_circle(
+        &admin,
+        &token,
+        &root,
+        &contribution,
+        &size,
+        &0u32,
+        &vk,
+        &0u32,
+        &Address::generate(&env),
+    );
 
-    let env_ref = env.clone();
-    let events = env.events().all();
-    let event = events
-        .iter()
-        .find(|(_, topics, _)| {
-            let t0: Option<Symbol> = topics.get(0).and_then(|v| v.try_into_val(&env_ref).ok());
-            let t1: Option<Symbol> = topics.get(1).and_then(|v| v.try_into_val(&env_ref).ok());
-            t0 == Some(symbol_short!("circle")) && t1 == Some(symbol_short!("created"))
-        })
-        .unwrap();
-
-    let (_, topics, data) = event;
-    let t0: Symbol = topics.get(0).unwrap().try_into_val(&env_ref).unwrap();
-    assert_eq!(t0, symbol_short!("circle"));
-    let topic2: u64 = topics.get(2).unwrap().try_into_val(&env).unwrap();
-    assert_eq!(topic2, circle_id);
-
-    let (event_admin, event_token, event_contribution, event_size): (Address, Address, i128, u32) =
-        data.try_into_val(&env).unwrap();
-    assert_eq!(event_admin, admin);
-    assert_eq!(event_token, token);
-    assert_eq!(event_contribution, contribution);
-    assert_eq!(event_size, size);
+    let expected = CircleCreated {
+        circle_id,
+        admin: admin.clone(),
+        token: token.clone(),
+        contrib: contribution,
+        size,
+    }
+    .to_xdr(&env, &contract_id);
+    let all = env.events().all().filter_by_contract(&contract_id);
+    assert!(
+        all.events().contains(&expected),
+        "CircleCreated event not found"
+    );
 }
 
 #[test]
@@ -59,28 +59,18 @@ fn fund_emits_funded_event() {
     let from = s.members[0].clone();
     client.fund(&s.circle_id, &from);
 
-    let env_ref = s.env.clone();
-    let events = s.env.events().all();
-    let event = events
-        .iter()
-        .find(|(_, topics, _)| {
-            let t0: Option<Symbol> = topics.get(0).and_then(|v| v.try_into_val(&env_ref).ok());
-            let t1: Option<Symbol> = topics.get(1).and_then(|v| v.try_into_val(&env_ref).ok());
-            t0 == Some(symbol_short!("circle")) && t1 == Some(symbol_short!("funded"))
-        })
-        .unwrap();
-
-    let (_, topics, data) = event;
-    let t0: Symbol = topics.get(0).unwrap().try_into_val(&env_ref).unwrap();
-    assert_eq!(t0, symbol_short!("circle"));
-    let topic2: u64 = topics.get(2).unwrap().try_into_val(&s.env).unwrap();
-    assert_eq!(topic2, s.circle_id);
-
-    let (event_from, new_pot, target): (Address, i128, i128) =
-        data.try_into_val(&s.env).unwrap();
-    assert_eq!(event_from, from);
-    assert_eq!(new_pot, s.contribution);
-    assert_eq!(target, s.contribution * (s.size as i128));
+    let expected = CircleFunded {
+        circle_id: s.circle_id,
+        from: from.clone(),
+        pot: s.contribution,
+        target: s.contribution * (s.size as i128),
+    }
+    .to_xdr(&s.env, &s.client_id);
+    let all = s.env.events().all().filter_by_contract(&s.client_id);
+    assert!(
+        all.events().contains(&expected),
+        "CircleFunded event not found"
+    );
 }
 
 #[test]
@@ -106,28 +96,18 @@ fn claim_emits_claimed_event() {
         &proof,
     );
 
-    let env_ref = s.env.clone();
-    let events = s.env.events().all();
-    let event = events
-        .iter()
-        .find(|(_, topics, _)| {
-            let t0: Option<Symbol> = topics.get(0).and_then(|v| v.try_into_val(&env_ref).ok());
-            let t1: Option<Symbol> = topics.get(1).and_then(|v| v.try_into_val(&env_ref).ok());
-            t0 == Some(symbol_short!("circle")) && t1 == Some(symbol_short!("claimed"))
-        })
-        .unwrap();
-
-    let (_, topics, data) = event;
-    let t0: Symbol = topics.get(0).unwrap().try_into_val(&env_ref).unwrap();
-    assert_eq!(t0, symbol_short!("circle"));
-    let topic2: u64 = topics.get(2).unwrap().try_into_val(&s.env).unwrap();
-    assert_eq!(topic2, s.circle_id);
-
-    let (round, amount, event_recipient): (u32, i128, Address) =
-        data.try_into_val(&s.env).unwrap();
-    assert_eq!(round, 0);
-    assert_eq!(amount, s.contribution * (s.size as i128));
-    assert_eq!(event_recipient, recipient);
+    let expected = CircleClaimed {
+        circle_id: s.circle_id,
+        cround: 0,
+        payout: s.contribution * (s.size as i128),
+        recipient: recipient.clone(),
+    }
+    .to_xdr(&s.env, &s.client_id);
+    let all = s.env.events().all().filter_by_contract(&s.client_id);
+    assert!(
+        all.events().contains(&expected),
+        "CircleClaimed event not found"
+    );
 }
 
 #[test]
@@ -142,25 +122,137 @@ fn cancel_circle_emits_cancelled_event() {
     }
     client.cancel_circle(&s.circle_id);
 
-    let env_ref = s.env.clone();
-    let events = s.env.events().all();
-    let event = events
-        .iter()
-        .find(|(_, topics, _)| {
-            let t0: Option<Symbol> = topics.get(0).and_then(|v| v.try_into_val(&env_ref).ok());
-            let t1: Option<Symbol> = topics.get(1).and_then(|v| v.try_into_val(&env_ref).ok());
-            t0 == Some(symbol_short!("circle")) && t1 == Some(symbol_short!("cancelled"))
-        })
-        .unwrap();
+    let expected = CircleCancelled {
+        circle_id: s.circle_id,
+        rcount: 2,
+        rtotal: s.contribution * 2i128,
+    }
+    .to_xdr(&s.env, &s.client_id);
+    let all = s.env.events().all().filter_by_contract(&s.client_id);
+    assert!(
+        all.events().contains(&expected),
+        "CircleCancelled event not found"
+    );
+}
 
-    let (_, topics, data) = event;
-    let t0: Symbol = topics.get(0).unwrap().try_into_val(&env_ref).unwrap();
-    assert_eq!(t0, symbol_short!("circle"));
-    let topic2: u64 = topics.get(2).unwrap().try_into_val(&s.env).unwrap();
-    assert_eq!(topic2, s.circle_id);
+#[test]
+fn propose_admin_emits_event() {
+    let env = Env::default();
+    env.mock_all_auths();
 
-    let (refunded_count, refunded_total): (u32, i128) =
-        data.try_into_val(&s.env).unwrap();
-    assert_eq!(refunded_count, 2);
-    assert_eq!(refunded_total, s.contribution * 2i128);
+    let contract_id = env.register(Contract, ());
+    let client = ContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+    let token = create_token(&env, &token_admin);
+    let root = real_root(&env);
+    let vk = real_verification_key(&env);
+    let circle_id = client.create_circle(
+        &admin,
+        &token,
+        &root,
+        &100i128,
+        &5u32,
+        &0u32,
+        &vk,
+        &0u32,
+        &Address::generate(&env),
+    );
+    let new_admin = Address::generate(&env);
+    client.propose_admin(&circle_id, &new_admin);
+
+    let expected = AdminProposed {
+        circle_id,
+        old_admin: admin.clone(),
+        new_admin: new_admin.clone(),
+    }
+    .to_xdr(&env, &contract_id);
+    let all = env.events().all().filter_by_contract(&contract_id);
+    assert!(
+        all.events().contains(&expected),
+        "AdminProposed event not found"
+    );
+}
+
+#[test]
+fn accept_admin_emits_event() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(Contract, ());
+    let client = ContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+    let token = create_token(&env, &token_admin);
+    let root = real_root(&env);
+    let vk = real_verification_key(&env);
+    let circle_id = client.create_circle(
+        &admin,
+        &token,
+        &root,
+        &100i128,
+        &5u32,
+        &0u32,
+        &vk,
+        &0u32,
+        &Address::generate(&env),
+    );
+    let new_admin = Address::generate(&env);
+    client.propose_admin(&circle_id, &new_admin);
+    client.accept_admin(&circle_id);
+
+    let expected = AdminAccepted {
+        circle_id,
+        old_admin: admin.clone(),
+        new_admin: new_admin.clone(),
+    }
+    .to_xdr(&env, &contract_id);
+    let all = env.events().all().filter_by_contract(&contract_id);
+    assert!(
+        all.events().contains(&expected),
+        "AdminAccepted event not found"
+    );
+}
+
+#[test]
+fn expire_round_emits_event() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(Contract, ());
+    let client = ContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+    let token = create_token(&env, &token_admin);
+    let root = real_root(&env);
+    let vk = real_verification_key(&env);
+    let circle_id = client.create_circle(
+        &admin,
+        &token,
+        &root,
+        &100i128,
+        &5u32,
+        &10u32,
+        &vk,
+        &0u32,
+        &Address::generate(&env),
+    );
+    env.ledger().with_mut(|l| {
+        l.sequence_number += 20;
+    });
+    client.expire_round(&circle_id);
+
+    let expected = RoundExpired {
+        circle_id,
+        eround: 0,
+    }
+    .to_xdr(&env, &contract_id);
+    let all = env.events().all().filter_by_contract(&contract_id);
+    assert!(
+        all.events().contains(&expected),
+        "RoundExpired event not found"
+    );
 }

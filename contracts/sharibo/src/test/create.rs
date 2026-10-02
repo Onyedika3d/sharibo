@@ -16,7 +16,17 @@ fn create_circle_requires_admin_auth() {
 
     let root = real_root(&env);
     let vk = real_verification_key(&env);
-    client.create_circle(&admin, &token, &root, &100i128, &5u32, &0u32, &vk, &0u32, &Address::generate(&env));
+    client.create_circle(
+        &admin,
+        &token,
+        &root,
+        &100i128,
+        &5u32,
+        &0u32,
+        &vk,
+        &0u32,
+        &Address::generate(&env),
+    );
 
     let auths = env.auths();
     assert_eq!(auths.len(), 1);
@@ -107,7 +117,17 @@ fn create_circle_rejects_size_above_max_capacity() {
     // The Merkle tree holds at most 2^4 = 16 commitments (circuits/config.json);
     // a larger size can never be fully claimed.
     let oversized = MAX_CIRCLE_SIZE + 1;
-    client.create_circle(&admin, &token, &root, &100i128, &oversized, &0u32, &vk, &0u32, &Address::generate(&env));
+    client.create_circle(
+        &admin,
+        &token,
+        &root,
+        &100i128,
+        &oversized,
+        &0u32,
+        &vk,
+        &0u32,
+        &Address::generate(&env),
+    );
 }
 
 #[test]
@@ -124,7 +144,17 @@ fn create_circle_accepts_max_capacity_size() {
     let root = real_root(&env);
     let vk = real_verification_key(&env);
 
-    let circle_id = client.create_circle(&admin, &token, &root, &100i128, &MAX_CIRCLE_SIZE, &0u32, &vk, &0u32, &Address::generate(&env));
+    let circle_id = client.create_circle(
+        &admin,
+        &token,
+        &root,
+        &100i128,
+        &MAX_CIRCLE_SIZE,
+        &0u32,
+        &vk,
+        &0u32,
+        &Address::generate(&env),
+    );
     let circle = client.get_circle(&circle_id);
     assert_eq!(circle.size, MAX_CIRCLE_SIZE);
 }
@@ -194,7 +224,17 @@ fn create_circle_rejects_zero_size() {
     let token = create_token(&env, &token_admin);
     let vk = real_verification_key(&env);
 
-    client.create_circle(&admin, &token, &real_root(&env), &100i128, &0u32, &0u32, &vk, &0u32, &Address::generate(&env));
+    client.create_circle(
+        &admin,
+        &token,
+        &real_root(&env),
+        &100i128,
+        &0u32,
+        &0u32,
+        &vk,
+        &0u32,
+        &Address::generate(&env),
+    );
 }
 
 #[test]
@@ -211,7 +251,17 @@ fn create_circle_rejects_wrong_vk_length() {
     let mut vk = real_verification_key(&env);
     vk.ic.pop_back();
 
-    client.create_circle(&admin, &token, &real_root(&env), &100i128, &5u32, &0u32, &vk, &0u32, &Address::generate(&env));
+    client.create_circle(
+        &admin,
+        &token,
+        &real_root(&env),
+        &100i128,
+        &5u32,
+        &0u32,
+        &vk,
+        &0u32,
+        &Address::generate(&env),
+    );
 }
 
 #[test]
@@ -227,7 +277,17 @@ fn create_circle_rejects_creation_time_overflow() {
     let token = create_token(&env, &token_admin);
     let vk = real_verification_key(&env);
 
-    client.create_circle(&admin, &token, &real_root(&env), &i128::MAX, &2u32, &0u32, &vk, &0u32, &Address::generate(&env));
+    client.create_circle(
+        &admin,
+        &token,
+        &real_root(&env),
+        &i128::MAX,
+        &2u32,
+        &0u32,
+        &vk,
+        &0u32,
+        &Address::generate(&env),
+    );
 }
 
 #[test]
@@ -249,7 +309,17 @@ fn zero_size_circle_is_rejected_at_creation() {
     // Without the guard, `size = 0` makes `pot_target = contribution * size = 0`.
     // The first claim sees `pot (0) == target (0)`, passes the `RoundNotFunded`
     // check, and then burns a nullifier while advancing an otherwise empty pot.
-    client.create_circle(&admin, &token, &root, &100i128, &0u32, &0u32, &vk, &0u32, &Address::generate(&env));
+    client.create_circle(
+        &admin,
+        &token,
+        &root,
+        &100i128,
+        &0u32,
+        &0u32,
+        &vk,
+        &0u32,
+        &Address::generate(&env),
+    );
 }
 
 #[test]
@@ -270,7 +340,17 @@ fn zero_contribution_circle_is_rejected_at_creation() {
 
     // Without validation, `contribution = 0` creates a circle whose `pot_target`
     // is also 0. From there the same empty-pot claim regression is reachable.
-    client.create_circle(&admin, &token, &root, &0i128, &5u32, &0u32, &vk, &0u32, &Address::generate(&env));
+    client.create_circle(
+        &admin,
+        &token,
+        &root,
+        &0i128,
+        &5u32,
+        &0u32,
+        &vk,
+        &0u32,
+        &Address::generate(&env),
+    );
 }
 
 #[test]
@@ -291,5 +371,15 @@ fn negative_contribution_is_rejected_at_creation() {
 
     // A negative contribution is also invalid: it would make the round target
     // non-positive and let the same empty-pot edge case slip through during claim.
-    client.create_circle(&admin, &token, &root, &(-100i128), &5u32, &0u32, &vk, &0u32, &Address::generate(&env));
+    client.create_circle(
+        &admin,
+        &token,
+        &root,
+        &(-100i128),
+        &5u32,
+        &0u32,
+        &vk,
+        &0u32,
+        &Address::generate(&env),
+    );
 }

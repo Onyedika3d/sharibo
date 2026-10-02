@@ -145,20 +145,20 @@ fn max_circle_size_matches_circuit_levels() {
     // bumping `levels` in circuits/config.json without updating MAX_CIRCLE_SIZE
     // fails this test, forcing a deliberate review of the contract constant
     // (and a redeploy, since the bound is compiled into the WASM).
-    let config_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../circuits/config.json");
+    let config_path =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../circuits/config.json");
     let contents = std::fs::read_to_string(&config_path)
         .expect("circuits/config.json not found; run tests from a full checkout");
 
-    let levels = parse_config_levels(&contents)
-        .unwrap_or_else(|| panic!("circuits/config.json must contain a numeric \"levels\" field: {contents}"));
+    let levels = parse_config_levels(&contents).unwrap_or_else(|| {
+        panic!("circuits/config.json must contain a numeric \"levels\" field: {contents}")
+    });
 
     // 2^levels computed in u64 so an absurdly deep circuit still yields a
     // clean assertion failure instead of an integer-overflow panic.
     let capacity = 1u64 << levels;
     assert_eq!(
-        MAX_CIRCLE_SIZE as u64,
-        capacity,
+        MAX_CIRCLE_SIZE as u64, capacity,
         "MAX_CIRCLE_SIZE must equal 2^levels ({capacity}) from circuits/config.json \
          — update the constant (and redeploy the contract) when the circuit depth changes",
     );
@@ -185,22 +185,45 @@ fn assert_invariants(env: &Env, contract_id: &Address, client: &ContractClient, 
 
     // pot == contribution * contributors.len()
     let contrib_count = circle.contributors.len() as i128;
-    assert_eq!(circle.pot, circle.contribution * contrib_count, "pot != contribution * contributors.len(): pot={} contribution={} count={}", circle.pot, circle.contribution, contrib_count);
+    assert_eq!(
+        circle.pot,
+        circle.contribution * contrib_count,
+        "pot != contribution * contributors.len(): pot={} contribution={} count={}",
+        circle.pot,
+        circle.contribution,
+        contrib_count
+    );
 
     // pot <= contribution * size
-    let target = circle.contribution.checked_mul(circle.size as i128).unwrap_or(i128::MAX);
-    assert!(circle.pot <= target, "pot {} > target {}", circle.pot, target);
+    let target = circle
+        .contribution
+        .checked_mul(circle.size as i128)
+        .unwrap_or(i128::MAX);
+    assert!(
+        circle.pot <= target,
+        "pot {} > target {}",
+        circle.pot,
+        target
+    );
 
     // After a successful claim the pot must be zero and contributors cleared
     if circle.round > 0 && circle.pot == 0 && !circle.cancelled {
-        assert_eq!(circle.contributors.len(), 0, "after claim contributors must be empty");
+        assert_eq!(
+            circle.contributors.len(),
+            0,
+            "after claim contributors must be empty"
+        );
     }
 
     // After cancel: pot == 0, cancelled == true, contributors empty
     if circle.cancelled {
         assert_eq!(circle.pot, 0, "cancelled circle must have pot==0");
         assert!(circle.cancelled, "cancelled flag must be true");
-        assert_eq!(circle.contributors.len(), 0, "cancelled circle must have no contributors");
+        assert_eq!(
+            circle.contributors.len(),
+            0,
+            "cancelled circle must have no contributors"
+        );
     }
 
     // The contract's token balance must be at least the sum of all live pots
@@ -219,6 +242,12 @@ fn assert_invariants(env: &Env, contract_id: &Address, client: &ContractClient, 
     for (token_addr, total_pots) in totals.iter() {
         let token_client = token::Client::new(env, token_addr);
         let contract_balance = token_client.balance(contract_id);
-        assert!(contract_balance >= *total_pots, "contract token balance {} for token {:?} is less than total live pots {}", contract_balance, token_addr, total_pots);
+        assert!(
+            contract_balance >= *total_pots,
+            "contract token balance {} for token {:?} is less than total live pots {}",
+            contract_balance,
+            token_addr,
+            total_pots
+        );
     }
 }

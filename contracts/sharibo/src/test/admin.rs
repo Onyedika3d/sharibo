@@ -38,7 +38,9 @@ fn old_admin_cannot_cancel_after_transfer() {
     // any signer, so we assert on the stored admin field directly.
     let env = Env::default();
     env.mock_all_auths();
-    let s = TestCircle::new(5, 100).with_round_deadline(100_000).build(&env);
+    let s = TestCircle::new(5, 100)
+        .with_round_deadline(100_000)
+        .build(&env);
     let client = ContractClient::new(&s.env, &s.client_id);
 
     let old_admin = s.admin.clone();

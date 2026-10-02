@@ -18,7 +18,17 @@ fn cpu_instruction_benchmarks() {
     let token = create_token(&env, &token_admin);
     let root = real_root(&env);
     let vk = real_verification_key(&env);
-    client.create_circle(&admin, &token, &root, &100i128, &5u32, &0u32, &vk, &0u32, &Address::generate(&env));
+    client.create_circle(
+        &admin,
+        &token,
+        &root,
+        &100i128,
+        &5u32,
+        &0u32,
+        &vk,
+        &0u32,
+        &Address::generate(&env),
+    );
     let create_cpu = env.cost_estimate().budget().cpu_instruction_cost();
     std::println!("bench create_circle: {create_cpu} CPU instructions");
 
@@ -109,7 +119,13 @@ fn claim_fits_cpu_budget() {
     let nullifier_hash = real_nullifier_hash(&s.env);
     let external_nullifier = real_external_nullifier_round0(&s.env);
     let proof = real_valid_proof(&s.env);
-    client.claim(&s.circle_id, &recipient, &nullifier_hash, &external_nullifier, &proof);
+    client.claim(
+        &s.circle_id,
+        &recipient,
+        &nullifier_hash,
+        &external_nullifier,
+        &proof,
+    );
 
     // Cpu limit: 100000000; used: 48066196 (~48%) — comfortably fits.
     // Dominated by Bls12381Pairing (~30.3M) + Bls12381G1Mul (~7.4M, from

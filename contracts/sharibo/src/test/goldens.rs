@@ -48,8 +48,16 @@ fn base64_encode(input: &[u8]) -> String {
     let mut i = 0;
     while i < input.len() {
         let b0 = input[i] as u32;
-        let b1 = if i + 1 < input.len() { input[i + 1] as u32 } else { 0 };
-        let b2 = if i + 2 < input.len() { input[i + 2] as u32 } else { 0 };
+        let b1 = if i + 1 < input.len() {
+            input[i + 1] as u32
+        } else {
+            0
+        };
+        let b2 = if i + 2 < input.len() {
+            input[i + 2] as u32
+        } else {
+            0
+        };
         out.push(ALPHABET[((b0 >> 2) & 0x3f) as usize] as char);
         out.push(ALPHABET[(((b0 << 4) | (b1 >> 4)) & 0x3f) as usize] as char);
         if i + 1 < input.len() {
@@ -80,17 +88,17 @@ fn goldens_dir() -> PathBuf {
 /// Read a committed golden (returns `None` if the file does not exist yet).
 fn read_golden(name: &str) -> Option<String> {
     let path = goldens_dir().join(name);
-    std::fs::read_to_string(&path).ok().map(|s| s.trim().to_string())
+    std::fs::read_to_string(&path)
+        .ok()
+        .map(|s| s.trim().to_string())
 }
 
 /// Write (or overwrite) a golden file, creating the directory if needed.
 fn write_golden(name: &str, content: &str) {
     let dir = goldens_dir();
-    std::fs::create_dir_all(&dir)
-        .expect("could not create xdr_goldens directory");
+    std::fs::create_dir_all(&dir).expect("could not create xdr_goldens directory");
     let path = dir.join(name);
-    std::fs::write(&path, content)
-        .unwrap_or_else(|e| panic!("could not write golden {name}: {e}"));
+    std::fs::write(&path, content).unwrap_or_else(|e| panic!("could not write golden {name}: {e}"));
     std::println!("  [UPDATE_GOLDEN] wrote {}", path.display());
 }
 
@@ -115,7 +123,8 @@ fn assert_golden(name: &str, actual: &str) {
         }
         Some(expected) => {
             assert_eq!(
-                actual, expected.as_str(),
+                actual,
+                expected.as_str(),
                 "\n\
                  ┌─────────────────────────────────────────────────────────────┐\n\
                  │  XDR wire format changed — golden `{name}` no longer matches │\n\
@@ -149,10 +158,8 @@ fn assert_golden(name: &str, actual: &str) {
 // the test suite — they are committed constants derived from the actual
 // Phase 1 trusted-setup ceremony.
 
-const GOLDEN_ADMIN: &str =
-    "GAAQEAYEAUDAOCAJBIFQYDIOB4IBCEQTCQKRMFYYDENBWHA5DYPSABOV";
-const GOLDEN_TOKEN: &str =
-    "GABAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEJXA";
+const GOLDEN_ADMIN: &str = "GAAQEAYEAUDAOCAJBIFQYDIOB4IBCEQTCQKRMFYYDENBWHA5DYPSABOV";
+const GOLDEN_TOKEN: &str = "GABAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEJXA";
 
 fn golden_circle(env: &Env) -> Circle {
     // Parse the two well-known addresses deterministically.
@@ -260,24 +267,11 @@ fn xdr_proof_round_trips() {
     let env = Env::default();
     let proof = real_valid_proof(&env);
     let xdr_bytes = proof.clone().to_xdr(&env);
-    let recovered = Proof::from_xdr(&env, &xdr_bytes)
-        .expect("Proof::from_xdr failed");
+    let recovered = Proof::from_xdr(&env, &xdr_bytes).expect("Proof::from_xdr failed");
 
-    assert_eq!(
-        recovered.a.to_xdr(&env),
-        proof.a.to_xdr(&env),
-        "proof.a"
-    );
-    assert_eq!(
-        recovered.b.to_xdr(&env),
-        proof.b.to_xdr(&env),
-        "proof.b"
-    );
-    assert_eq!(
-        recovered.c.to_xdr(&env),
-        proof.c.to_xdr(&env),
-        "proof.c"
-    );
+    assert_eq!(recovered.a.to_xdr(&env), proof.a.to_xdr(&env), "proof.a");
+    assert_eq!(recovered.b.to_xdr(&env), proof.b.to_xdr(&env), "proof.b");
+    assert_eq!(recovered.c.to_xdr(&env), proof.c.to_xdr(&env), "proof.c");
 }
 
 #[test]
@@ -287,8 +281,8 @@ fn xdr_verification_key_round_trips() {
     let env = Env::default();
     let vk = real_verification_key(&env);
     let xdr_bytes = vk.clone().to_xdr(&env);
-    let recovered = VerificationKey::from_xdr(&env, &xdr_bytes)
-        .expect("VerificationKey::from_xdr failed");
+    let recovered =
+        VerificationKey::from_xdr(&env, &xdr_bytes).expect("VerificationKey::from_xdr failed");
 
     assert_eq!(
         recovered.alpha.to_xdr(&env),

@@ -34,12 +34,12 @@ fn claim_reverts_on_tampered_public_input() {
 
 #[test]
 #[should_panic(expected = "Error(Contract, #2)")] // RoundNotFunded
-// Ideally we'd pin pot == contribution*size - 1 (the single stroop
-// short of full) as the tightest possible underfunded case. But `fund`
-// only ever moves whole `contribution`-sized deposits — there's no way
-// to land the pot on a non-multiple-of-contribution value through the
-// public API. The tightest *reachable* underfunded state is one missing
-// depositor, so that's what this test pins instead.
+                                                  // Ideally we'd pin pot == contribution*size - 1 (the single stroop
+                                                  // short of full) as the tightest possible underfunded case. But `fund`
+                                                  // only ever moves whole `contribution`-sized deposits — there's no way
+                                                  // to land the pot on a non-multiple-of-contribution value through the
+                                                  // public API. The tightest *reachable* underfunded state is one missing
+                                                  // depositor, so that's what this test pins instead.
 fn claim_reverts_when_underfunded() {
     let env = Env::default();
     env.mock_all_auths();

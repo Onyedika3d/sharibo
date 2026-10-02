@@ -76,9 +76,16 @@ fn cancel_zero_contributors_is_clean_close() {
     client.cancel_circle(&s.circle_id);
 
     let circle_after = client.get_circle(&s.circle_id);
-    assert_eq!(circle_after.pot, 0, "pot must remain 0 after cancelling an empty circle");
+    assert_eq!(
+        circle_after.pot, 0,
+        "pot must remain 0 after cancelling an empty circle"
+    );
     assert!(circle_after.cancelled, "circle must be marked cancelled");
-    assert_eq!(circle_after.contributors.len(), 0, "contributors vec must stay empty");
+    assert_eq!(
+        circle_after.contributors.len(),
+        0,
+        "contributors vec must stay empty"
+    );
 
     // No tokens moved: contract balance is still 0.
     assert_eq!(
